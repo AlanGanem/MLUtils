@@ -48,7 +48,7 @@ class eval_multiclass():
         self.check_prob_df = check_prob_df
         return
             
-    def iterate_over_threshold(self, n_points = 301):
+    def iterate_over_threshold(self, n_points = 101):
 
         
         self.threshold_arr = threshold_arr = np.linspace(0,1,n_points)
