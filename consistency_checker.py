@@ -24,13 +24,22 @@ class ConsistencyChecker:
         self.dtypes = df.dtypes
         return self
 
-    def check_values(self, check_df, absolute=True):
-        return self._check_col_values(check_df, absolute)
+    def check_values(self, check_df, absolute=True, return_dict=False):
+        checker = self._check_col_values(check_df, absolute)
+        if not return_dict:
+            checker = pd.DataFrame(checker).T
+            checker = checker.reset_index(drop=False).set_index(['type', 'index']).sort_index()
+        return checker
 
-    def check_types(self, check_df):
-        names = self._check_col_names(check_df)
-        types = self._check_col_types(check_df)
-        return {'names': names, 'types': types}
+    def check_types(self, check_df, return_dict=False):
+        checker = self._check_col_types(check_df)
+        if not return_dict:
+            checker = pd.DataFrame(checker).T
+        return checker
+
+    def check_names(self, check_df, return_dict=False):
+        checker = pd.DataFrame(self._check_col_names(check_df)).T
+        return checker
 
     def _get_description(self, df):
         description_dict = {}
@@ -53,28 +62,21 @@ class ConsistencyChecker:
         return description_dict
 
     def _check_col_names(self, check_df):
-        standard_columns = set(self.columns)
-        check_columns = set(check_df.columns)
-
-        matching_columns = standard_columns.intersection(check_columns)
-        check_not_in_standard = check_columns - standard_columns
-        standard_not_in_check = standard_columns - check_columns
-
-        closest_matches_check = {}
-        for col in standard_not_in_check:
-            try:
-                closest_matches_check[col] = difflib.get_close_matches(col, list(check_columns), n=1, cutoff=0.0)[0]
-            except:
-                print('No match found for {}'.format(col))
-                closest_matches_check[col] = None
-
-        check_dict = {
-            'matching': matching_columns,
-            'check_not_in_standard': check_not_in_standard,
-            'standard_not_in_check': standard_not_in_check,
-            'closest_matches': closest_matches_check
-        }
-
+        union_columns = set(self.columns).union(set(check_df.columns))
+        check_dict = {}
+        for col in union_columns:
+            check_dict[col] = {}
+            check_dict[col]['in_standard'] = col in self.columns
+            check_dict[col]['in_check'] = col in check_df.columns
+            check_dict[col]['in_both'] = check_dict[col]['in_standard'] and check_dict[col]['in_check']
+            check_dict[col]['closest_match'] = np.nan
+            if not check_dict[col]['in_both']:
+                if check_dict[col]['in_check']:
+                    check_dict[col]['closest_match'] = \
+                    difflib.get_close_matches(col, list(self.columns), n=1, cutoff=0.0)[0]
+                else:
+                    check_dict[col]['closest_match'] = \
+                    difflib.get_close_matches(col, list(check_df.columns), n=1, cutoff=0.0)[0]
         return check_dict
 
     def _check_col_types(self, check_df):
@@ -83,7 +85,7 @@ class ConsistencyChecker:
         dtypes_check = self.dtypes[matching_columns] == check_df.dtypes[matching_columns]
         dtypes_check_dict = {}
         for col in dtypes_check.index:
-            dtypes_check_dict[col] = (dtypes_check[col], (self.dtypes[col], check_df.dtypes[col]))
+            dtypes_check_dict[col] = {'check': dtypes_check[col], 'types': (self.dtypes[col], check_df.dtypes[col])}
         return dtypes_check_dict
 
     def _check_col_values(self, check_df, absolute):
@@ -92,7 +94,7 @@ class ConsistencyChecker:
         dtypes_check_dict = self._check_col_types(check_df)
         matching_columns = set(check_df.columns).intersection(set(self.columns))
 
-        matching_names_and_types = [i for i in matching_columns if dtypes_check_dict[i][0] == True]
+        matching_names_and_types = [i for i in matching_columns if dtypes_check_dict[i]['check'] == True]
         check_values_dict = {}
         for col in matching_names_and_types:
 
@@ -106,11 +108,14 @@ class ConsistencyChecker:
                         description_dict_standard[col]['description'])
 
                 check_values_dict[col] = check_values_dict[col].to_dict()
+                check_values_dict[col]['type'] = dtypes_check_dict[col]['types'][0]
             else:
                 check_values_dict[col] = self._check_cat_values(description_dict_check, col)
                 if absolute == False:
-                    check_values_dict[col] = {key: check_values_dict[col][key] / check_values_dict[col]['len_standard']
-                                              for key in check_values_dict[col]}
+                    check_values_dict[col] = {
+                        key: check_values_dict[col][key] / check_values_dict[col]['unique_standard'] for key in
+                        check_values_dict[col]}
+                check_values_dict[col]['type'] = dtypes_check_dict[col]['types'][0]
 
         return check_values_dict
 
@@ -119,7 +124,7 @@ class ConsistencyChecker:
         set1 = set(self.description[col]['description']['unique'])
         set2 = set(description_dict_check[col]['description']['unique'])
         intrsc = set1.intersection(set2)
-        values_dict = {'len_standard': len(set1), 'len_check': len(set2), 'intersection': len(intrsc)}
+        values_dict = {'unique_standard': len(set1), 'unique_check': len(set2), 'intersection': len(intrsc)}
         return values_dict
 
 
