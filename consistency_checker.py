@@ -7,6 +7,10 @@ import joblib
 
 class ConsistencyChecker:
 
+    @staticmethod
+    def check_identical(df1, df2):
+        return (check_df1 == check_df2).all()
+
     @classmethod
     def load(cls, loading_path, **joblibargs):
         return joblib.load(loading_path, **joblibargs)
@@ -23,6 +27,18 @@ class ConsistencyChecker:
         self.description = self._get_description(df)
         self.dtypes = df.dtypes
         return self
+
+    def fast_check_names(self, check_df):
+        if not self.check_names(check_df)['in_both'].all():
+            print(
+                'Missmatching column names found!\nMake sure you are comparing all wanted columns checking obj.check_names(df) (FUTURE WARNING)')
+        return
+
+    def fast_check_types(self, check_df):
+        if not self.check_types(check_df)['check'].all():
+            print(
+                'Missmatching column types found!\nMake sure you are comparing all wanted columns checking obj.check_types(df) (FUTURE WARNING)')
+        return
 
     def check_values(self, check_df, absolute=True, return_dict=False):
         checker = self._check_col_values(check_df, absolute)
@@ -70,6 +86,7 @@ class ConsistencyChecker:
             check_dict[col]['in_check'] = col in check_df.columns
             check_dict[col]['in_both'] = check_dict[col]['in_standard'] and check_dict[col]['in_check']
             check_dict[col]['closest_match'] = np.nan
+            check_dict[col]['closest_match_score'] = np.nan
             if not check_dict[col]['in_both']:
                 if check_dict[col]['in_check']:
                     check_dict[col]['closest_match'] = \
@@ -77,10 +94,14 @@ class ConsistencyChecker:
                 else:
                     check_dict[col]['closest_match'] = \
                     difflib.get_close_matches(col, list(check_df.columns), n=1, cutoff=0.0)[0]
+                check_dict[col]['closest_match_score'] = difflib.SequenceMatcher(None, col, check_dict[col][
+                    'closest_match']).ratio()
         return check_dict
 
     def _check_col_types(self, check_df):
-        # check dtypes
+        # check if there are names inncosistency
+        self.fast_check_names(check_df)
+        #
         matching_columns = set(self.columns).intersection(set(check_df.columns))
         dtypes_check = self.dtypes[matching_columns] == check_df.dtypes[matching_columns]
         dtypes_check_dict = {}
@@ -89,6 +110,10 @@ class ConsistencyChecker:
         return dtypes_check_dict
 
     def _check_col_values(self, check_df, absolute):
+        # check if there are names or types inncosistency
+        self.fast_check_names(check_df)
+        self.fast_check_types(check_df)
+        #
         description_dict_check = self._get_description(check_df)
         description_dict_standard = self.description
         dtypes_check_dict = self._check_col_types(check_df)
@@ -126,7 +151,3 @@ class ConsistencyChecker:
         intrsc = set1.intersection(set2)
         values_dict = {'unique_standard': len(set1), 'unique_check': len(set2), 'intersection': len(intrsc)}
         return values_dict
-
-
-
-
