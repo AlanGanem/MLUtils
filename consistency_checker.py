@@ -149,5 +149,7 @@ class ConsistencyChecker:
         set1 = set(self.description[col]['description']['unique'])
         set2 = set(description_dict_check[col]['description']['unique'])
         intrsc = set1.intersection(set2)
-        values_dict = {'unique_standard': len(set1), 'unique_check': len(set2), 'intersection': len(intrsc)}
+        new = set2 - intrsc
+        values_dict = {'unique_standard': len(set1), 'unique_check': len(set2), 'intersection': len(intrsc),
+                       'new_instances': list(new)}
         return values_dict
