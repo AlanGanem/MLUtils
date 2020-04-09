@@ -52,6 +52,9 @@ class ConsistencyChecker:
         joblib.dump(self, saving_path, **joblibargs)
 
     def __init__(self):
+        '''
+        Object instatiation
+        '''
         return
 
     def fit(self, df):
