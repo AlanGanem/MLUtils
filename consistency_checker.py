@@ -6,22 +6,60 @@ import joblib
 
 
 class ConsistencyChecker:
+    '''
+    A class for checking consistency (column names, dtypes and values) of two dataframes, following the 'fit-check'
+    paradigm
+    '''
 
     @staticmethod
     def check_identical(df1, df2):
-        return (check_df1 == check_df2).all()
+        '''
+        cehcks wheter two dataframes are identical
+        :param df1: first data frame
+        :param df2: second data frame
+        :return: returns a boolean series of identical columns
+        '''
+        return (df1 == df2).all()
+
+    @staticmethod
+    def check_col_distribution(df1, df2):
+        '''
+        compares distribution of 'column' in df1 and df2. Works for categorical and continuous columns
+        :param self:
+        :param check_df:
+        :param column:
+        :return:
+        '''
+        raise NotImplementedError
 
     @classmethod
     def load(cls, loading_path, **joblibargs):
+        '''
+        loads serialized consistency_checker object
+        :param loading_path: path containing serialized object
+        :param joblibargs: joblib.load kwargs
+        :return: returns deserialized object
+        '''
         return joblib.load(loading_path, **joblibargs)
 
     def save(self, saving_path, **joblibargs):
+        '''
+        serializes and saves consistency_checker object to saving_path
+        :param saving_path: saving path of the file
+        :param joblibargs: joblib.dump kwargs
+        :return:
+        '''
         joblib.dump(self, saving_path, **joblibargs)
 
     def __init__(self):
         return
 
     def fit(self, df):
+        '''
+        saves standard_df attributes do object state
+        :param df: standard_df
+        :return: self
+        '''
         self.columns = df.columns
         self.dtypes = df.dtypes
         self.description = self._get_description(df)
@@ -29,18 +67,68 @@ class ConsistencyChecker:
         return self
 
     def fast_check_names(self, check_df):
+        '''
+        checks if there's some column name mismatch between check_df and standard_df
+        :param check_df: df to perform check
+        :return: check boolean
+        '''
         if not self.check_names(check_df)['in_both'].all():
             print(
-                'Missmatching column names found!\nMake sure you are comparing all wanted columns checking obj.check_names(df) (FUTURE WARNING)')
-        return
+                'Missmatching column names found!\nMake sure you are comparing all wanted columns checking obj.check_\
+                names(df) (FUTURE WARNING)')
+        return self.check_names(check_df)['in_both'].all()
 
     def fast_check_types(self, check_df):
+        '''
+        checks if there's some type mismatch between columns of check_df_ and standard_df
+        :param check_df: df to perform check
+        :return: check boolean
+        '''
         if not self.check_types(check_df)['check'].all():
             print(
-                'Missmatching column types found!\nMake sure you are comparing all wanted columns checking obj.check_types(df) (FUTURE WARNING)')
-        return
+                'Missmatching column types found!\nMake sure you are comparing all wanted columns checking obj.check \
+                _types(df) (FUTURE WARNING)')
+        return self.check_types(check_df)['check'].all()
+
+    def check_col_values(self, check_df, column, check_missing = False):
+        '''
+        Returns the unique values in check_df[column] that are not in standard_df[column] (unseen).
+        If check_missing == True, returns also the values of standard_df[column] unseen values in check_df[column]
+
+        :param check_df: df to check values
+        :param column: column to check
+        :param check_missing: whether to check missing values in check_df
+        :return:
+        '''
+
+        set_check = set(self._get_description(check_df[[column]])[column]['unique'])
+        set_standard = set(self.description[column]['unique'])
+
+        new_in_check = set_check - set_standard
+        total_new_in_check_proportion = check_df[column].isin(new_in_check).mean()
+        check_dict = {'unseen_values':new_in_check, 'unseen_proportion':total_new_in_check_proportion}
+
+        if check_missing:
+            not_in_check = set_standard - set_check
+            unique_not_in_check_proportion = len(not_in_check)/len(set_standard)
+            check_dict = {**check_dict, **{'missing_values':not_in_check,
+                                           'missing_proportion':unique_not_in_check_proportion}}
+        return check_dict
 
     def check_values(self, check_df, absolute=True, return_dict=False):
+        '''
+        compares check_df values to standard_df values, only of columns with matching names and types.
+        if columns dtype == float, the values returned are a sustraction of both dfs 'description' method of pandas
+        for descriptive statistics. if not, the values are compared as categorical, returning unique values for each
+        column of each df and their intersection.
+        absolute defines if whether the values are absolute values or are divided by de standard_df's values for each
+        statistic.
+
+        :param check_df:
+        :param absolute:
+        :param return_dict:
+        :return: dict or dataframe of comparisons
+        '''
         checker = self._check_col_values(check_df, absolute)
         if not return_dict:
             checker = pd.DataFrame(checker).T
@@ -48,16 +136,38 @@ class ConsistencyChecker:
         return checker
 
     def check_types(self, check_df, return_dict=False):
+        '''
+        performs dtype checks for columns with matching names in check_df and standard_df
+        :param check_df:
+        :param return_dict:
+        :return: returns a dict/dataframe containing boolean dtype checks and
+        a tupple containing (standard_type, check_type)
+        '''
         checker = self._check_col_types(check_df)
         if not return_dict:
             checker = pd.DataFrame(checker).T
         return checker
 
     def check_names(self, check_df, return_dict=False):
+        '''
+        checks columns names in check_df according to standard_df.
+        returns name boolean checks and closest matches in case of name mismatches
+        according to difflib.get_close_matches
+
+        :param check_df:
+        :param return_dict: whether to return a dict or a pandas DataFrame
+        :return:
+        '''
         checker = pd.DataFrame(self._check_col_names(check_df)).T
         return checker
 
     def _get_description(self, df):
+        '''
+        internal method to get df description
+        :param df:
+        :return:
+        '''
+
         description_dict = {}
         for col in df:
             if not df[col].dtype in ['float']:
@@ -78,6 +188,11 @@ class ConsistencyChecker:
         return description_dict
 
     def _check_col_names(self, check_df):
+        '''
+        internal method to check col names in check_df
+        :param check_df:
+        :return:
+        '''
         union_columns = set(self.columns).union(set(check_df.columns))
         check_dict = {}
         for col in union_columns:
@@ -99,6 +214,11 @@ class ConsistencyChecker:
         return check_dict
 
     def _check_col_types(self, check_df):
+        '''
+        Internal method to check check_df's columns dtypes
+        :param check_df:
+        :return:
+        '''
         # check if there are names inncosistency
         self.fast_check_names(check_df)
         #
@@ -110,6 +230,12 @@ class ConsistencyChecker:
         return dtypes_check_dict
 
     def _check_col_values(self, check_df, absolute):
+        '''
+        Internal method to check check_df's col values
+        :param check_df:
+        :param absolute:
+        :return:
+        '''
         # check if there are names or types inncosistency
         self.fast_check_names(check_df)
         self.fast_check_types(check_df)
@@ -145,6 +271,12 @@ class ConsistencyChecker:
         return check_values_dict
 
     def _check_cat_values(self, description_dict_check, col):
+        '''
+        Internal method to compare categorical values in check_df[col]
+        :param description_dict_check:
+        :param col:
+        :return:
+        '''
 
         set1 = set(self.description[col]['description']['unique'])
         set2 = set(description_dict_check[col]['description']['unique'])
