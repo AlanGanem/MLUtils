@@ -94,8 +94,11 @@ class GroupPercentiler:
             msk = data[self.group_by] == cluster
             
             values = data[msk][self.observed_variable]
-            percentiles = self.online_estimators_dict[cluster].transform(values)
-            data.loc[msk, '_PERCENTILE'] = percentiles            
+            try:
+                percentiles = self.online_estimators_dict[cluster].transform(values)
+                data.loc[msk, '_PERCENTILE'] = percentiles
+            except KeyError:
+                pass
         return data
     
     def inverse_transform(self, data, percentile_col):
@@ -104,8 +107,11 @@ class GroupPercentiler:
         for cluster in tqdm(data[self.group_by].unique()):
             msk = data[self.group_by] == cluster
             values = data[msk][percentile_col]
-            percentiles = self.online_estimators_dict[cluster].inverse_transform(values)
-            data.loc[msk, '_INV_PERCENTILE'] = percentiles            
+            try:
+                percentiles = self.online_estimators_dict[cluster].inverse_transform(values)
+                data.loc[msk, '_INV_PERCENTILE'] = percentiles            
+            except KeyError:
+                pass
         return data
  
 #usage example
