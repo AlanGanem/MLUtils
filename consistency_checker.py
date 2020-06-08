@@ -96,7 +96,7 @@ class ConsistencyChecker:
     def check_col_values(self, check_df, column, check_missing = False):
         '''
         Returns the unique values in check_df[column] that are not in standard_df[column] (unseen).
-        If check_missing == True, returns also the values of standard_df[column] unseen values in check_df[column]
+        If check_missing == True, returns also the values of standard_df[column] unseen in check_df[column]
 
         :param check_df: df to check values
         :param column: column to check

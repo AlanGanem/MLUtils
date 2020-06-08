@@ -10,9 +10,8 @@ class DfScaler():
     def save(self, saving_path, **joblibargs):
         joblib.dump(self, saving_path, **joblibargs)
 
-    def __init__(self, method=None, columns=None, method_columns=None):
-        assert columns.__class__ != str
-        columns = list(columns)
+    def __init__(self, columns, method=None, method_columns=None):
+        assert columns.__class__ != list
 
         self.avalible_scalers = ['MinMaxScaler', 'StandardScaler', 'RobustScaler']
 
